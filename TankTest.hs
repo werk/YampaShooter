@@ -21,12 +21,12 @@ game world = do
     lastTime <- newIORef undefined
     reactimate (init lastTime) (sense lastTime) actuate (tank (vector2 10 10, North))
     where
-        init :: IORef UTCTime -> IO (Event Key)
+        init :: IORef UTCTime -> IO (Event Input)
         init lastTime = do 
             newTime <- getCurrentTime
             writeIORef lastTime newTime
             return NoEvent
-        sense :: IORef UTCTime -> Bool -> IO (DTime, Maybe (Event Key))
+        sense :: IORef UTCTime -> Bool -> IO (DTime, Maybe (Event Input))
         sense lastTime blocking = do
             key <- input world
             oldTime <- readIORef lastTime
@@ -34,9 +34,9 @@ game world = do
             writeIORef lastTime newTime
             let deltaTime = diffTime oldTime newTime
             return $ (deltaTime, Just (maybeToEvent key))
-        actuate :: Bool -> Tank -> IO Bool
-        actuate changed tank = do
-            output world tank
+        actuate :: Bool -> Output -> IO Bool
+        actuate changed state = do
+            output world state
             return False
 
 diffTime :: UTCTime -> UTCTime -> DTime

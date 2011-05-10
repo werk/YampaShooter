@@ -1,0 +1,14 @@
+name:           YampaShooter
+version:        0.0.0.1
+license:        GPL
+author:         Michael Flænø Werk and Joakim Ahnfelt-Rønne
+category:       Games
+synopsis:       YampaShooter is a top-down team based networked tank game using functional reactive programming.
+build-type:     Simple
+stability:      alpha
+cabal-version:  >= 1.0
+Build-Depends:  base, Yampa, containers, stm, diffarray, text, transformers, ncurses, time
+
+Executable: YampaShooter
+Main-is: TankTest.hs
+
