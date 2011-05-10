@@ -1,9 +1,5 @@
-{-# LANGUAGE RankNTypes, NoMonomorphismRestriction #-}
---module AsciiShooter.Terminal where
-
 import FRP.Yampa hiding (first)
 import FRP.Yampa.Event
-import FRP.Yampa.Vector2
 import Data.Time.Clock
 import Data.IORef
 
@@ -11,15 +7,13 @@ import World
 import World.NCurses
 import Entity
 
--- reactimate :: IO a -> (Bool -> IO (DTime, Maybe a)) -> (Bool -> b -> IO Bool) -> SF a b -> IO ()
-
 main :: IO ()
 main = runWorld (game :: NCursesWorld -> IO ())
 
 game :: World w => w -> IO ()
 game world = do
     lastTime <- newIORef undefined
-    reactimate (init lastTime) (sense lastTime) actuate (tank (vector2 10 10, North))
+    reactimate (init lastTime) (sense lastTime) actuate (tank initialState)
     where
         init :: IORef UTCTime -> IO (Event Input)
         init lastTime = do 
@@ -46,11 +40,11 @@ tank :: Tank -> SF (Event Key) Tank
 tank tank0 = accumHoldBy act tank0
     where
         act :: Tank -> Key -> Tank
-        act (position, _) (KeyRotation rotation) = (position ^+^ rotationVector rotation, rotation)
+        act (position, _) (KeyDirection direction) = (position ^+^ directionVector direction, direction)
 
-rotationVector :: Rotation -> Vector
-rotationVector North = vector2 0 1
-rotationVector South = vector2 0 (-1)
-rotationVector East = vector2 1 0
-rotationVector West = vector2 (-1) 0
+directionVector :: Direction -> Vector
+directionVector North = vector2 0 1
+directionVector South = vector2 0 (-1)
+directionVector East = vector2 1 0
+directionVector West = vector2 (-1) 0
 

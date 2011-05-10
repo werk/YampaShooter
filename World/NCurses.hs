@@ -68,10 +68,10 @@ getKey window = do
     case event of
         Just (EventSpecialKey key) -> 
             case key of
-                KeyUpArrow -> return (Just (KeyRotation North))
-                KeyDownArrow -> return (Just (KeyRotation South))
-                KeyLeftArrow -> return (Just (KeyRotation West))
-                KeyRightArrow -> return (Just (KeyRotation East))
+                KeyUpArrow -> return (Just (KeyDirection North))
+                KeyDownArrow -> return (Just (KeyDirection South))
+                KeyLeftArrow -> return (Just (KeyDirection West))
+                KeyRightArrow -> return (Just (KeyDirection East))
                 _ -> return Nothing
         Just (EventCharacter character) -> 
             case character of
@@ -125,9 +125,10 @@ toSprite lines = toSpriteLines 0 lines
         toSpriteLine column row (char : line) = ((column, row), (char, Red)) : toSpriteLine (column + 1) row line
             
 drawTank :: Picture -> Tank -> Picture
-drawTank picture (location, rotation) = 
-    let position = toTuple location in
-    let sprite = translateSprite position (tankSprite rotation) in
+drawTank picture (location, direction) = 
+    let (_, height) = snd (bounds picture) in
+    let (x, y) = toTuple location in
+    let sprite = translateSprite (x, height - y) (tankSprite direction) in
     picture // sprite
     
 toTuple :: Vector -> (Int, Int)
