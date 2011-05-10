@@ -8,7 +8,7 @@ import FRP.Yampa.Vector2
 import FRP.Yampa.VectorSpace
 import Control.Concurrent
 import Control.Concurrent.MVar
-import Control.Concurrent.Chan
+import Control.Concurrent.STM
 import Control.Monad.IO.Class
 import Control.Monad hiding (mapM_, forM_)
 import Data.Foldable
@@ -18,22 +18,22 @@ import Data.Set (Set)
 import qualified Data.Set as Set
 import Prelude hiding (mapM_)
 
-data NCursesWorld = NCursesWorld (Chan Input) (MVar Output)
+data NCursesWorld = NCursesWorld (TChan Input) (MVar Output)
 
 data Color = Red deriving (Eq, Ord, Show)
 type Picture = DiffArray (Int, Int) (Char, Color)
 
 instance World NCursesWorld where
-    input (NCursesWorld channel _) = do
-        empty <- isEmptyChan channel
+    input (NCursesWorld channel _) = atomically $ do
+        empty <- isEmptyTChan channel
         if empty 
             then return Nothing
             else do
-                state <- readChan channel
+                state <- readTChan channel
                 return (Just state)
     output (NCursesWorld _ variable) state = putMVar variable state
     runWorld gameFunction = do
-        channel <- newChan
+        channel <- newTChanIO
         stateVariable <- newEmptyMVar
         stopVariable <- newEmptyMVar
         forkIO $ runCurses $ do 
@@ -43,11 +43,12 @@ instance World NCursesWorld where
         putMVar stopVariable ()
         return result
         where
+            loop :: Window -> TChan Key -> MVar Output -> MVar () -> Curses ()
             loop window channel stateVariable stopVariable = do
                 continue <- liftIO $ isEmptyMVar stopVariable
                 when continue $ do
                     key <- getKey window
-                    liftIO $ mapM_ (writeChan channel) key
+                    liftIO $ mapM_ (atomically . writeTChan channel) key
                     state <- liftIO $ tryTakeMVar stateVariable
                     mapM_ (draw window) state
                     loop window channel stateVariable stopVariable

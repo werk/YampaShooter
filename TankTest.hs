@@ -14,13 +14,14 @@ import Entity
 -- reactimate :: IO a -> (Bool -> IO (DTime, Maybe a)) -> (Bool -> b -> IO Bool) -> SF a b -> IO ()
 
 main :: IO ()
-main = runWorld (main' :: NCursesWorld -> IO ())
+main = runWorld (game :: NCursesWorld -> IO ())
 
-main' :: World w => w -> IO ()
-main' world = do
+game :: World w => w -> IO ()
+game world = do
     lastTime <- newIORef undefined
     reactimate (init lastTime) (sense lastTime) actuate (tank (vector2 10 10, North))
     where
+        init :: IORef UTCTime -> IO (Event Key)
         init lastTime = do 
             newTime <- getCurrentTime
             writeIORef lastTime newTime
