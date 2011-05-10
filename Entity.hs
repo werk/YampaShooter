@@ -18,7 +18,9 @@ data Key = KeyDirection Direction | KeyFire deriving (Eq, Ord, Show)
 type Vector = Vector2 Double
 type Tank = (Vector, Direction)
 
-tank :: Tank -> SF (Event Key) Tank
+type :->: = SF
+
+tank :: Tank -> Event Key :->: Tank
 tank tank0 = accumHoldBy act tank0
     where
         act :: Tank -> Key -> Tank
