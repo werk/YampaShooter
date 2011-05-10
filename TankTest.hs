@@ -35,16 +35,4 @@ game world = do
 
 diffTime :: UTCTime -> UTCTime -> DTime
 diffTime oldTime newTime = (fromRational . toRational) (diffUTCTime newTime oldTime)
-    
-tank :: Tank -> SF (Event Key) Tank
-tank tank0 = accumHoldBy act tank0
-    where
-        act :: Tank -> Key -> Tank
-        act (position, _) (KeyDirection direction) = (position ^+^ directionVector direction, direction)
-
-directionVector :: Direction -> Vector
-directionVector North = vector2 0 1
-directionVector South = vector2 0 (-1)
-directionVector East = vector2 1 0
-directionVector West = vector2 (-1) 0
 

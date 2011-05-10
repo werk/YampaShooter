@@ -2,8 +2,6 @@ module World where
 
 import Entity
 
-data Key = KeyDirection Direction | KeyFire deriving (Eq, Ord, Show)
-
 type Input = Key
 type Output = Tank
 
