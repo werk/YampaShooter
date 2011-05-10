@@ -12,7 +12,7 @@ import Control.Concurrent.STM
 import Control.Monad.IO.Class
 import Control.Monad hiding (mapM_, forM_)
 import Data.Foldable
-import Data.Text hiding (map, take, reverse)
+import Data.Text hiding (map, take, reverse, filter)
 import Data.Array.Diff
 import Data.Set (Set)
 import qualified Data.Set as Set
@@ -22,6 +22,7 @@ data NCursesWorld = NCursesWorld (TChan Input) (MVar Output)
 
 data Color = Red deriving (Eq, Ord, Show)
 type Picture = DiffArray (Int, Int) (Char, Color)
+type Sprite = [((Int, Int), (Char, Color))]
 
 instance World NCursesWorld where
     input (NCursesWorld channel _) = atomically $ do
@@ -113,23 +114,27 @@ tankSprite South = toSprite (reverse tankAsciiNorth)
 tankSprite West = toSprite (map reverse tankAsciiEast)
 tankSprite East = toSprite tankAsciiEast
 
-toSprite :: [String] -> [((Int, Int), (Char, Color))]
+toSprite :: [String] -> Sprite
 toSprite lines = toSpriteLines 0 lines
     where
-        toSpriteLines :: Int -> [String] -> [((Int, Int), (Char, Color))]
+        toSpriteLines :: Int -> [String] -> Sprite
         toSpriteLines row [] = []
         toSpriteLines row (line : lines) = toSpriteLine 0 row line ++ toSpriteLines (row + 1) lines
 
-        toSpriteLine :: Int -> Int -> String -> [((Int, Int), (Char, Color))]
+        toSpriteLine :: Int -> Int -> String -> Sprite
         toSpriteLine column row [] = []
         toSpriteLine column row (char : line) = ((column, row), (char, Red)) : toSpriteLine (column + 1) row line
             
 drawTank :: Picture -> Tank -> Picture
-drawTank picture (location, direction) = 
-    let (_, height) = snd (bounds picture) in
+drawTank picture (location, direction) = drawSprite picture location (tankSprite direction)
+
+drawSprite :: Picture -> Vector -> Sprite -> Picture
+drawSprite picture location sprite = 
+    let ((x1, y1), (x2, y2)) = bounds picture in
+    let withinBounds (x, y) = x1 <= x && x <= x2 && y1 <= y && y <= y2 in
     let (x, y) = toTuple location in
-    let sprite = translateSprite (x, height - y) (tankSprite direction) in
-    picture // sprite
+    let sprite' = translateSprite (x, y2 - y) sprite in
+    picture // filter (withinBounds . fst) sprite'
     
 toTuple :: Vector -> (Int, Int)
 toTuple vector = (round (vector2X vector), round (vector2Y vector))
