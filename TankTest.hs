@@ -26,7 +26,7 @@ game world = do
             oldTime <- readIORef lastTime
             newTime <- getCurrentTime
             writeIORef lastTime newTime
-            let deltaTime = diffTime oldTime newTime
+            let deltaTime = diffTime newTime oldTime
             return $ (deltaTime, Just (maybeToEvent key))
         actuate :: Bool -> Output -> IO Bool
         actuate changed state = do
@@ -34,5 +34,5 @@ game world = do
             return False
 
 diffTime :: UTCTime -> UTCTime -> DTime
-diffTime oldTime newTime = (fromRational . toRational) (diffUTCTime newTime oldTime)
+diffTime newTime oldTime = (fromRational . toRational) (diffUTCTime newTime oldTime)
 

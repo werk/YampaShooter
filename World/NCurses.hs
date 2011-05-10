@@ -12,7 +12,7 @@ import Control.Concurrent.STM
 import Control.Monad.IO.Class
 import Control.Monad hiding (mapM_, forM_)
 import Data.Foldable
-import Data.Text hiding (map, take, reverse, filter)
+import Data.Text hiding (map, take, reverse, filter, length)
 import Data.Array.Diff
 import Data.Set (Set)
 import qualified Data.Set as Set
@@ -39,6 +39,7 @@ instance World NCursesWorld where
         stopVariable <- newEmptyMVar
         forkIO $ runCurses $ do 
             window <- defaultWindow
+            setEcho False
             loop window channel stateVariable stopVariable
         result <- gameFunction (NCursesWorld channel stateVariable)
         putMVar stopVariable ()
@@ -82,6 +83,7 @@ getKey window = do
             
 background :: Integral a => a -> a -> DiffArray (Int, Int) (Char, Color)     
 background width height = 
+    -- Workaround -2 because drawing on the bottom edge breaks NCurses
     listArray ((0, 0), (fromIntegral width - 1, fromIntegral height - 2)) (repeat (' ', Red))
 
 drawPicture :: Window -> (Color -> ColorID) -> Picture -> Curses ()
