@@ -11,27 +11,29 @@ import Control.Concurrent.MVar
 import Control.Concurrent.STM
 import Control.Monad.IO.Class
 import Control.Monad hiding (mapM_, forM_)
-import Data.Foldable
-import Data.Text hiding (map, take, reverse, filter, length)
+import Data.Char (toLower)
+import Data.Foldable 
+import qualified Data.Text as T
 import Data.Array.Diff
 import Data.Set (Set)
+import Data.List (transpose)
 import qualified Data.Set as Set
-import Prelude hiding (mapM_)
+import Prelude hiding (mapM_, maximum)
 
-data NCursesWorld = NCursesWorld (TChan Input) (MVar Output)
+data NCursesWorld = NCursesWorld (TChan PlayerKey) (MVar WorldOutput)
 
-data Color = Red deriving (Eq, Ord, Show)
+data Color = Red | Green | Transparent deriving (Eq, Ord, Show)
 type Picture = DiffArray (Int, Int) (Char, Color)
-type Sprite = [((Int, Int), (Char, Color))]
+data Sprite = Sprite Int Int [((Int, Int), (Char, Color))]
 
 instance World NCursesWorld where
     input (NCursesWorld channel _) = atomically $ do
         empty <- isEmptyTChan channel
         if empty 
-            then return Nothing
+            then return (WorldInput { keyPress = Nothing })
             else do
                 state <- readTChan channel
-                return (Just state)
+                return (WorldInput { keyPress = Just state })
     output (NCursesWorld _ variable) state = putMVar variable state
     runWorld gameFunction = do
         channel <- newTChanIO
@@ -40,51 +42,77 @@ instance World NCursesWorld where
         forkIO $ runCurses $ do 
             window <- defaultWindow
             setEcho False
-            loop window channel stateVariable stopVariable
+            colors <- initializeColors
+            loop window colors channel stateVariable stopVariable
         result <- gameFunction (NCursesWorld channel stateVariable)
         putMVar stopVariable ()
         return result
         where
-            loop :: Window -> TChan Key -> MVar Output -> MVar () -> Curses ()
-            loop window channel stateVariable stopVariable = do
+            loop :: Window -> (Color -> ColorID) -> TChan PlayerKey -> MVar WorldOutput -> MVar () -> Curses ()
+            loop window colors channel stateVariable stopVariable = do
                 continue <- liftIO $ isEmptyMVar stopVariable
                 when continue $ do
                     key <- getKey window
                     liftIO $ mapM_ (atomically . writeTChan channel) key
                     state <- liftIO $ tryTakeMVar stateVariable
-                    mapM_ (draw window) state
-                    loop window channel stateVariable stopVariable
+                    mapM_ (draw window colors) state
+                    loop window colors channel stateVariable stopVariable
 
-draw :: Window -> Tank -> Curses ()
-draw window tank = do 
+initializeColors :: Curses (Color -> ColorID)
+initializeColors = do
     red <- newColorID ColorRed ColorBlack 1
-    let colors = const red
+    green <- newColorID ColorGreen ColorBlack 2
+    black <- newColorID ColorBlack ColorBlack 3
+    return $ \color -> case color of 
+        Green -> green
+        Transparent -> black
+        _ -> red
+
+draw :: Window -> (Color -> ColorID) -> WorldOutput -> Curses ()
+draw window colors worldOutput = do
     (rows, columns) <- screenSize
     let picture = background columns rows
-    picture <- return $ drawTank picture tank
-    drawPicture window colors picture
-        
-getKey :: Window -> Curses (Maybe Key)
+    let picture' = foldl' drawEntity picture (entityStates worldOutput) 
+    drawPicture window colors picture'
+
+drawEntity :: Picture -> EntityState -> Picture
+drawEntity picture entityState = case entityState of
+    Tank { entityPosition = position, entityDirection = direction, entityPlayer = player } -> do 
+        drawTank picture (playerColor player) (position, direction)
+    Projectile { entityPosition = position, entityPlayer = player } -> do 
+        drawProjectile picture (playerColor player) position
+
+playerColor 1 = Red
+playerColor 2 = Green
+
+getKey :: Window -> Curses (Maybe PlayerKey)
 getKey window = do
     event <- getEvent window (Just 0)
     case event of
         Just (EventSpecialKey key) -> 
             case key of
-                KeyUpArrow -> return (Just (KeyDirection North))
-                KeyDownArrow -> return (Just (KeyDirection South))
-                KeyLeftArrow -> return (Just (KeyDirection West))
-                KeyRightArrow -> return (Just (KeyDirection East))
+                KeyUpArrow -> return (Just (KeyDirection North, 1))
+                KeyDownArrow -> return (Just (KeyDirection South, 1))
+                KeyLeftArrow -> return (Just (KeyDirection West, 1))
+                KeyRightArrow -> return (Just (KeyDirection East, 1))
+                KeyHome -> return (Just (KeyBreak, 1))
+                KeyEnd -> return (Just (KeyFire, 1))
                 _ -> return Nothing
         Just (EventCharacter character) -> 
-            case character of
-                ' ' -> return (Just KeyFire)
+            case toLower character of
+                'r' -> return (Just (KeyDirection North, 2))
+                'f' -> return (Just (KeyDirection South, 2))
+                'd' -> return (Just (KeyDirection West, 2))
+                'g' -> return (Just (KeyDirection East, 2))
+                'q' -> return (Just (KeyBreak, 2))
+                'a' -> return (Just (KeyFire, 2))
                 _ -> return Nothing
         _ -> return Nothing
             
 background :: Integral a => a -> a -> DiffArray (Int, Int) (Char, Color)     
 background width height = 
     -- Workaround -2 because drawing on the bottom edge breaks NCurses
-    listArray ((0, 0), (fromIntegral width - 1, fromIntegral height - 2)) (repeat (' ', Red))
+    listArray ((0, 0), (fromIntegral width - 1, fromIntegral height - 2)) (repeat (' ', Transparent))
 
 drawPicture :: Window -> (Color -> ColorID) -> Picture -> Curses ()
 drawPicture window colors picture = do
@@ -92,51 +120,66 @@ drawPicture window colors picture = do
         forM_ (assocs picture) $ \((x, y), (character, color)) -> do
             moveCursor (fromIntegral y) (fromIntegral x)
             setColor (colors color)
-            drawText (pack ([character]))
+            drawText (T.pack ([character]))
     render
 
-translateSprite :: (Int, Int) -> [((Int, Int), (Char, Color))] -> [((Int, Int), (Char, Color))]
-translateSprite (x, y) sprite = 
+translatePoints :: (Int, Int) -> [((Int, Int), (Char, Color))] -> [((Int, Int), (Char, Color))]
+translatePoints (x, y) sprite = 
     map (first (\(x', y') -> (x + x', y + y'))) sprite
-        
+
+projectileAscii = [
+    "*"
+    ]        
         
 tankAsciiNorth = [
-    " || ",
-    "¤||¤",
-    "¤()¤",
-    "¤--¤"]
+    " | ",
+    "¤|¤",
+    "¤O¤",
+    "¤-¤",
+    "   "]
 
 tankAsciiEast = [
-    "¤¤¤ ",
-    "|o==",
-    "¤¤¤ "]
-            
+    " ¤¤¤ ",
+    " |o==",
+    " ¤¤¤ "]
+
 tankSprite North = toSprite tankAsciiNorth
 tankSprite South = toSprite (reverse tankAsciiNorth)
 tankSprite West = toSprite (map reverse tankAsciiEast)
 tankSprite East = toSprite tankAsciiEast
 
-toSprite :: [String] -> Sprite
-toSprite lines = toSpriteLines 0 lines
+toSprite :: [String] -> Color -> Sprite 
+toSprite lines color = 
+    Sprite 
+        (width lines) 
+        (width (transpose lines)) 
+        (filter ((/= ' ') . fst . snd) (toSpriteLines 0 lines))
     where
-        toSpriteLines :: Int -> [String] -> Sprite
+        width lines = maximum (0 : map length lines)
+
+        toSpriteLines :: Int -> [String] -> [((Int, Int), (Char, Color))]
         toSpriteLines row [] = []
         toSpriteLines row (line : lines) = toSpriteLine 0 row line ++ toSpriteLines (row + 1) lines
 
-        toSpriteLine :: Int -> Int -> String -> Sprite
+        toSpriteLine :: Int -> Int -> String -> [((Int, Int), (Char, Color))]
         toSpriteLine column row [] = []
-        toSpriteLine column row (char : line) = ((column, row), (char, Red)) : toSpriteLine (column + 1) row line
-            
-drawTank :: Picture -> Tank -> Picture
-drawTank picture (location, direction) = drawSprite picture location (tankSprite direction)
+        toSpriteLine column row (char : line) = ((column, row), (char, color)) : toSpriteLine (column + 1) row line
+
+drawProjectile :: Picture -> Color -> Vector -> Picture
+drawProjectile picture playerColor location = 
+    drawSprite picture location (toSprite projectileAscii playerColor)
+
+drawTank :: Picture -> Color -> (Vector, Direction) -> Picture
+drawTank picture playerColor (location, direction) = 
+    drawSprite picture location (tankSprite direction playerColor)
 
 drawSprite :: Picture -> Vector -> Sprite -> Picture
-drawSprite picture location sprite = 
+drawSprite picture location (Sprite width height points) = 
     let ((x1, y1), (x2, y2)) = bounds picture in
     let withinBounds (x, y) = x1 <= x && x <= x2 && y1 <= y && y <= y2 in
     let (x, y) = toTuple location in
-    let sprite' = translateSprite (x, y2 - y) sprite in
-    picture // filter (withinBounds . fst) sprite'
+    let points' = translatePoints (x - width `div` 2, y2 - y - height `div` 2) points in
+    picture // filter (withinBounds . fst) points'
     
 toTuple :: Vector -> (Int, Int)
 toTuple vector = (round (vector2X vector), round (vector2Y vector))
