@@ -2,8 +2,10 @@
 
 import FRP.Yampa hiding (first)
 import FRP.Yampa.Event
+import FRP.Yampa.Vector2
 import Data.Time.Clock
 import Data.IORef
+import Debug.Trace
 
 import World
 import World.NCurses
@@ -50,7 +52,10 @@ game = proc worldInput -> do
     where
         entities0 = listToIL [
             tankEntity 1 (vector2 20 10) East,
-            tankEntity 2 (vector2 40 40) West
+            tankEntity 2 (vector2 40 40) West,
+            wallEntity (vector2 0 0, vector2 5 100),
+            wallEntity (vector2 0 0, vector2 100 5),
+            wallEntity (vector2 55 55, vector2 60 60)
             ]
 
 gameCore :: IL Entity -> SF (WorldInput, IL EntityOutput) (IL EntityOutput)
@@ -71,25 +76,71 @@ killOrSpawn (_, entityOutputs) = foldl (mergeBy (.)) noEvent es
                  
                  
 route :: (WorldInput, IL EntityOutput) -> IL sf -> IL (EntityInput, sf)
-route (worldInput', entityOutputs) entities = mapIL route' entities
+route (worldInput', entityOutputs) entities = {-trace (show (length (elemsIL entityOutputs))) $-} mapIL route' entities
     where
-        route' (k, entity) = 
+        entityStates = mapIL (entityState . snd) entityOutputs
+        cs = collisions (assocsIL entityStates)
+        route' (k, entity) = -- trace (show (length cs))
             (EntityInput { keyPressed = maybeToEvent (keyPress worldInput'), 
-            collision = NoEvent }
+            collision = maybeToEvent (lookup k cs) }
             , entity)
 
 
 collisions :: [(ILKey, EntityState)] -> [(ILKey, Collision)]
-collisions entities = 
-    
+collisions entities = map collision collisionPairs
     where
-        tankCollision (v1, p1) (v2, p2) 
-        collisionTime p1 v1 p2 = (p2 - p1) / v1
-        entityPairs = [(e1, e2) | e1 <- entities, e2 <- entities, fst e1 /= fst e2, overlap (snd e1) (snd e2)]
+        collision :: ((ILKey, EntityState), (ILKey, EntityState)) -> (ILKey, Collision)
+        collision ((k1, s1), (k2, s2)) =
+            let displacement' = if isSolid s1 && isSolid s2
+                    then
+                        let t = tankCollisionDisplacement (frontCollisonSideVelocity s1 s2) (frontCollisonSideVelocity s2 s1) in
+                        t *^ entityVelocity s1
+                    else zeroVector in
+            (k1, Collision { colliders = [(k2, s2)], displacement = displacement'})
+                
+
+        frontPositionVelocity state = edgePositionVelocity (entityDirection state) state
+
+        edgePositionVelocity :: Direction -> EntityState -> (Double, Double)
+        edgePositionVelocity direction state = 
+            let position = entityPosition state in
+            case direction of
+                North -> (vector2Y position + 0.5 * vector2Y (entitySize state), vector2Y (entityVelocity state))
+                South -> (vector2Y position - 0.5 * vector2Y (entitySize state), vector2Y (entityVelocity state))
+                East -> (vector2X position + 0.5 * vector2X (entitySize state), vector2X (entityVelocity state))
+                West -> (vector2X position - 0.5 * vector2X (entitySize state), vector2X (entityVelocity state))
+        
+        frontCollisonSideVelocity :: EntityState -> EntityState -> (Double, Double, Double)
+        frontCollisonSideVelocity s1 s2 = 
+            let (p, v) = frontPositionVelocity s1 in
+            let (q, _) = edgePositionVelocity (oppositeDirection (entityDirection s1)) s2 in
+            (p, q, v)
+            
+        tankCollisionDisplacement (p1, q1, v1) (p2, q2, v2) =
+            if v1 == 0 then 0 else
+                let t1 = collisionTime p1 q1 v1 in
+                let t2 = collisionTime p2 q2 v2 in
+                if t1 < t2
+                then 0
+                else t1
+
+        collisionTime p q v = (q - p) / v
+
+        collisionPairs :: [((ILKey, EntityState), (ILKey, EntityState))]
+        collisionPairs = [(e1, e2) | e1 <- entities, e2 <- entities, fst e1 /= fst e2, overlap (boundingBox (snd e1)) (boundingBox (snd e2))]
+
         overlap (v1, v2) (u1, u2) = 
             overlapAxis (vector2X v1, vector2X v2) (vector2X u1, vector2X u2) &&
             overlapAxis (vector2Y v1, vector2Y v2) (vector2Y u1, vector2Y u2)
+
         overlapAxis (start1, end1) (start2, end2) = start1 <= end2 && start2 <= end1
+
         boundingBox e = (entityPosition e ^-^ 0.5 *^ entitySize e, entityPosition e ^+^ 0.5 *^ entitySize e)
+
+
+oppositeDirection North = South
+oppositeDirection South = North
+oppositeDirection East = West
+oppositeDirection West = East
 
 

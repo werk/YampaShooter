@@ -6,10 +6,11 @@ module Entity (
     PlayerKey,
     Player,
     Vector, (^*^),
-    tankEntity, tankSize,
-    projectileEntity, projectileSize,
+    tankEntity,
+    projectileEntity,
+    wallEntity,
     WorldInput (..), WorldOutput (..),
-    Entity (..), EntityInput (..), EntityOutput (..), EntityState (..),
+    Entity (..), Collision (..), EntityInput (..), EntityOutput (..), EntityState (..),
     module FRP.Yampa.Vector2,
     module FRP.Yampa.VectorSpace
     ) where
@@ -38,7 +39,7 @@ data WorldOutput = WorldOutput {
 type Entity = SF EntityInput EntityOutput
 
 data Collision = Collision {
-    colliders :: [(ILKey, EntityState)] 
+    colliders :: [(ILKey, EntityState)],
     displacement :: Vector
     }
 
@@ -56,45 +57,62 @@ data EntityOutput = EntityOutput {
 data EntityState = 
     Tank {
         entityPosition :: Vector,
+        entityVelocity :: Vector,
         entityDirection :: Direction,
-        entityPlayer :: Player
+        entityPlayer :: Player,
+        entitySize :: Vector,
+        isSolid :: Bool
+    } |
+    Wall {
+        entityPosition :: Vector,
+        entityVelocity :: Vector,
+        entityDirection :: Direction,
+        entitySize :: Vector,
+        isSolid :: Bool
     } |
     Projectile {
         entityPosition :: Vector,
-        entityPlayer :: Player
+        entityPlayer :: Player,
+        entitySize :: Vector,
+        isSolid :: Bool
     }
     
-projectileSize = 1
-    
 projectileEntity :: Player -> Vector -> Direction -> Entity
-projectileEntity player position0 direction = proc _ -> do
-    let velocity = 30 *^ directionVector direction
-    position <- (position0 ^+^) ^<< integral -< velocity
-    returnA -< EntityOutput {
-        entityState = Projectile {
-            entityPosition = position,
-            entityPlayer = player
-            },
-        killRequest = NoEvent,
-        spawnRequest = NoEvent
-        }
-
-tankSize = 3
-
+projectileEntity player position0 direction = 
+    proc (EntityInput { collision = collisionEvent }) -> do
+        event <- delayEvent 0.01 -< collisionEvent
+        let velocity = 30 *^ directionVector direction
+        position <- (position0 ^+^) ^<< integral -< velocity
+        returnA -< EntityOutput {
+            entityState = Projectile {
+                entityPosition = position,
+                entityPlayer = player,
+                entitySize = vector2 1 1,
+                isSolid = False
+                },
+            killRequest = event `tag` (),
+            spawnRequest = NoEvent
+            }
 
 
 tankEntity :: Player -> Vector -> Direction -> Entity
 tankEntity player position0 direction0 = 
     proc (EntityInput { keyPressed = keyPressedEvent, collision = collisionEvent }) -> do
         (velocity, direction) <- accumHoldBy act (vector2 0 0, direction0) -< keyPressedEvent
-        position <- (position0 ^+^) ^<< impulseIntegral -< (velocity, fmap displacement collisionEvent)
+        event <- delayEvent 0.01 -< collisionEvent
+        position <- (position0 ^+^) ^<< impulseIntegral -< (velocity, fmap displacement event)
         returnA -< EntityOutput {
             entityState = Tank {
                 entityPosition = position,
+                entityVelocity = velocity,
                 entityDirection = direction,
-                entityPlayer = player
+                entityPlayer = player,
+                entitySize = vector2 3 3,
+                isSolid = True
                 },
-            killRequest = NoEvent,
+            killRequest = case event of
+                Event Collision { colliders = colliders' } | or [True | (_, Projectile {}) <- colliders'] -> Event ()
+                _ -> NoEvent,
             spawnRequest = case keyPressedEvent of
                 Event (KeyFire, player') | player' == player -> Event [
                     projectileEntity player (position ^+^ (2 *^ directionVector direction)) direction
@@ -108,6 +126,21 @@ tankEntity player position0 direction0 =
         act (_, oldDirection) (KeyBreak, player') | player' == player = 
             (vector2 0 0, oldDirection)
         act old _ = old
+
+
+wallEntity :: (Vector, Vector) -> Entity
+wallEntity (v1, v2) = proc _ -> returnA -< EntityOutput {
+    entityState = Wall {
+        entityPosition = 0.5 *^ (v1 ^+^ v2),
+        entityVelocity = zeroVector,
+        entityDirection = North,
+        entitySize = v2 ^-^ v1,
+        isSolid = True
+        },
+    killRequest = NoEvent,
+    spawnRequest = NoEvent
+    }
+    
 
 directionVector :: Direction -> Vector
 directionVector North = vector2 0 1

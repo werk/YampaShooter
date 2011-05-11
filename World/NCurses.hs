@@ -22,7 +22,7 @@ import Prelude hiding (mapM_, maximum)
 
 data NCursesWorld = NCursesWorld (TChan PlayerKey) (MVar WorldOutput)
 
-data Color = Red | Green | Transparent deriving (Eq, Ord, Show)
+data Color = Red | Green | Blue | Transparent deriving (Eq, Ord, Show)
 type Picture = DiffArray (Int, Int) (Char, Color)
 data Sprite = Sprite Int Int [((Int, Int), (Char, Color))]
 
@@ -63,9 +63,11 @@ initializeColors = do
     red <- newColorID ColorRed ColorBlack 1
     green <- newColorID ColorGreen ColorBlack 2
     black <- newColorID ColorBlack ColorBlack 3
+    blue <- newColorID ColorBlue ColorBlack 4
     return $ \color -> case color of 
-        Green -> green
         Transparent -> black
+        Green -> green
+        Blue -> blue
         _ -> red
 
 draw :: Window -> (Color -> ColorID) -> WorldOutput -> Curses ()
@@ -81,6 +83,8 @@ drawEntity picture entityState = case entityState of
         drawTank picture (playerColor player) (position, direction)
     Projectile { entityPosition = position, entityPlayer = player } -> do 
         drawProjectile picture (playerColor player) position
+    Wall { entityPosition = position, entitySize = size } -> do 
+        drawWall picture position size
 
 playerColor 1 = Red
 playerColor 2 = Green
@@ -172,6 +176,13 @@ drawProjectile picture playerColor location =
 drawTank :: Picture -> Color -> (Vector, Direction) -> Picture
 drawTank picture playerColor (location, direction) = 
     drawSprite picture location (tankSprite direction playerColor)
+
+drawWall :: Picture -> Vector -> Vector -> Picture
+drawWall picture position size = 
+    let (width, height) = (round (vector2X size), round (vector2Y size)) in
+    let spriteLines = replicate height (replicate width '#') in
+    let sprite = toSprite spriteLines Blue in
+    drawSprite picture position sprite
 
 drawSprite :: Picture -> Vector -> Sprite -> Picture
 drawSprite picture location (Sprite width height points) = 
