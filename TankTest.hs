@@ -91,40 +91,40 @@ collisions entities = map collision collisionPairs
     where
         collision :: ((ILKey, EntityState), (ILKey, EntityState)) -> (ILKey, Collision)
         collision ((k1, s1), (k2, s2)) =
-            let displacement' = if isSolid s1 && isSolid s2
-                    then
-                        let t = tankCollisionDisplacement (frontCollisonSideVelocity s1 s2) (frontCollisonSideVelocity s2 s1) in
-                        t *^ entityVelocity s1
-                    else zeroVector in
-            (k1, Collision { colliders = [(k2, s2)], displacement = displacement'})
+            (k1, Collision { 
+                colliders = [(k2, s2)], 
+                displacement = collisionDisplacement s1 s2 
+                }
+            )
                 
+        collisionDisplacement :: EntityState -> EntityState -> Vector
+        collisionDisplacement s1 s2 =
+            let direction1 = entityDirection s1 in
+            let projection1 = projection direction1 in
+            let front1 = entityPosition s1 ^+^ ((sign direction1 * 0.5) *^ entitySize s1) in
+            let collision1 = entityPosition s2 ^-^ ((sign direction1 * 0.5) *^ entitySize s2) in
+            let impactTime1 = collisionTime front1 (entityVelocity s1) collision1 projection1 in
 
-        frontPositionVelocity state = edgePositionVelocity (entityDirection state) state
+            let direction2 = entityDirection s2 in
+            let projection2 = projection direction2 in
+            let front2 = entityPosition s2 ^+^ ((sign direction2 * 0.5) *^ entitySize s2) in
+            let collision2 = entityPosition s1 ^-^ ((sign direction2 * 0.5) *^ entitySize s1) in
+            let impactTime2 = collisionTime front2 (entityVelocity s2) collision2 projection2 in
 
-        edgePositionVelocity :: Direction -> EntityState -> (Double, Double)
-        edgePositionVelocity direction state = 
-            let position = entityPosition state in
-            case direction of
-                North -> (vector2Y position + 0.5 * vector2Y (entitySize state), vector2Y (entityVelocity state))
-                South -> (vector2Y position - 0.5 * vector2Y (entitySize state), vector2Y (entityVelocity state))
-                East -> (vector2X position + 0.5 * vector2X (entitySize state), vector2X (entityVelocity state))
-                West -> (vector2X position - 0.5 * vector2X (entitySize state), vector2X (entityVelocity state))
-        
-        frontCollisonSideVelocity :: EntityState -> EntityState -> (Double, Double, Double)
-        frontCollisonSideVelocity s1 s2 = 
-            let (p, v) = frontPositionVelocity s1 in
-            let (q, _) = edgePositionVelocity (oppositeDirection (entityDirection s1)) s2 in
-            (p, q, v)
-            
-        tankCollisionDisplacement (p1, q1, v1) (p2, q2, v2) =
-            if v1 == 0 then 0 else
-                let t1 = collisionTime p1 q1 v1 in
-                let t2 = collisionTime p2 q2 v2 in
-                if t1 < t2
-                then 0
-                else t1
+            if (isSolid s1 && isSolid s2) 
+                && moving s1 
+                && moving s2 `implies` (impactTime1 >= impactTime2)
+            then (2 * impactTime1) *^ entityVelocity s1
+            else zeroVector
 
-        collisionTime p q v = (q - p) / v
+        moving :: EntityState -> Bool
+        moving state = entityVelocity state /= zeroVector 
+
+        implies a b = not a || b
+
+        collisionTime :: Vector -> Vector -> Vector -> (Vector -> Double) -> Double
+        collisionTime frontPoint velocity collisionPoint projection = 
+            (projection collisionPoint - projection frontPoint) / projection velocity
 
         collisionPairs :: [((ILKey, EntityState), (ILKey, EntityState))]
         collisionPairs = [(e1, e2) | e1 <- entities, e2 <- entities, fst e1 /= fst e2, overlap (boundingBox (snd e1)) (boundingBox (snd e2))]
@@ -137,10 +137,14 @@ collisions entities = map collision collisionPairs
 
         boundingBox e = (entityPosition e ^-^ 0.5 *^ entitySize e, entityPosition e ^+^ 0.5 *^ entitySize e)
 
-
-oppositeDirection North = South
-oppositeDirection South = North
-oppositeDirection East = West
-oppositeDirection West = East
-
-
+        projection North = vector2Y
+        projection South = vector2Y
+        projection East = vector2X
+        projection West = vector2X
+        
+        sign North = 1
+        sign South = -1
+        sign East = 1
+        sign West = -1
+        
+        

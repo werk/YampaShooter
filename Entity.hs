@@ -99,7 +99,7 @@ tankEntity :: Player -> Vector -> Direction -> Entity
 tankEntity player position0 direction0 = 
     proc (EntityInput { keyPressed = keyPressedEvent, collision = collisionEvent }) -> do
         (velocity, direction) <- accumHoldBy act (vector2 0 0, direction0) -< keyPressedEvent
-        event <- delayEvent 0.01 -< collisionEvent
+        event <- delayEvent 0.0001 -< collisionEvent
         position <- (position0 ^+^) ^<< impulseIntegral -< (velocity, fmap displacement event)
         returnA -< EntityOutput {
             entityState = Tank {
