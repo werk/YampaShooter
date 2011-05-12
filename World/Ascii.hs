@@ -15,7 +15,6 @@ data Color = Red | Green | Blue | Transparent deriving (Eq, Ord, Show)
 type Picture = DiffArray (Int, Int) (Char, Color)
 data Sprite = Sprite Int Int [((Int, Int), (Char, Color))]
 
-
 playerColor 1 = Red
 playerColor 2 = Green
 
@@ -35,7 +34,7 @@ background width height =
 
 translatePoints :: (Int, Int) -> [((Int, Int), (Char, Color))] -> [((Int, Int), (Char, Color))]
 translatePoints (x, y) sprite = 
-    map (first (\(x', y') -> (x + x', y + y'))) sprite
+    map ((\((x', y'), c) -> ((x + x', y + y'), c))) sprite
 
 projectileAscii = [
     "*"
@@ -103,10 +102,4 @@ toTuple vector = (round (vector2X vector), round (vector2Y vector))
 
 toVector :: (Int, Int) -> Vector
 toVector (x, y) = vector2 (fromIntegral x) (fromIntegral y)
-
-first :: (a -> b) -> (a, c) -> (b, c)
-first f (a, c) = (f a, c)
-
-second :: (b -> c) -> (a, b) -> (a, c)
-second f (a, b) = (a, f b)
 
