@@ -7,7 +7,6 @@ import Entity
 import Graphics.Vty hiding (Color, Picture)
 import qualified Graphics.Vty as Vty
 import Control.Concurrent
-import Control.Concurrent.MVar
 import Control.Concurrent.STM
 import Control.Monad.IO.Class
 import Control.Monad hiding (mapM_, forM_)
@@ -20,7 +19,7 @@ import Prelude hiding (mapM_)
 import Debug.Trace
 
 
-data VtyWorld = VtyWorld (TChan PlayerKey) (MVar WorldOutput)
+data VtyWorld = VtyWorld (TChan PlayerKey) (TVar (Maybe WorldOutput))
 
 instance World VtyWorld where
     input (VtyWorld channel _) = atomically $ do
@@ -30,17 +29,19 @@ instance World VtyWorld where
             else do
                 state <- readTChan channel
                 return (WorldInput { keyPress = Just state })
-    output (VtyWorld _ variable) state = putMVar variable state
+    output (VtyWorld _ variable) state = atomically $ writeTVar variable (Just state)
     runWorld gameFunction = do
+        let colors = initializeColors
         channel <- newTChanIO
-        stateVariable <- newEmptyMVar
-        stopVariable <- newEmptyMVar
+        stateVariable <- newTVarIO Nothing
+        stopChannel <- newTChanIO
         vty <- mkVty
-        colors <- initializeColors
-        forkIO $ loop stopVariable $ inputLoop (next_event vty) channel
-        forkIO $ loop stopVariable $ drawLoop (terminal vty) colors stateVariable
+        forkIO $ loop stopChannel $ inputLoop (next_event vty) channel
+        forkIO $ loop stopChannel $ drawLoop (terminal vty) colors stateVariable
         result <- gameFunction (VtyWorld channel stateVariable)
-        putMVar stopVariable ()
+        atomically $ replicateM 2 $ writeTChan stopChannel ()
+        atomically $ await (isEmptyTChan stopChannel)
+        shutdown vty
         return result
         where
             inputLoop :: IO Event -> TChan PlayerKey -> IO ()
@@ -48,26 +49,38 @@ instance World VtyWorld where
                 key <- liftM getKey input
                 mapM_ (atomically . writeTChan channel) key
             
-            drawLoop :: TerminalHandle -> (Color -> Attr) -> MVar WorldOutput -> IO ()
+            drawLoop :: TerminalHandle -> (Color -> Attr) -> TVar (Maybe WorldOutput) -> IO ()
             drawLoop terminal colors stateVariable = do
-                state <- tryTakeMVar stateVariable
-                mapM_ (draw terminal colors) state
-                    
-            loop :: MVar () -> IO () -> IO ()
-            loop stopVariable monad = do
-                continue <- isEmptyMVar stopVariable
+                state <- atomically $ do
+                    state <- readTVar stateVariable
+                    case state of
+                        Just state -> do
+                            writeTVar stateVariable Nothing
+                            return state
+                        Nothing -> retry
+                draw terminal colors state
+
+            loop :: TChan () -> IO () -> IO ()
+            loop stopChannel monad = do
+                continue <- atomically $ do
+                    empty <- isEmptyTChan stopChannel
+                    when (not empty) (readTChan stopChannel)
+                    return empty
                 when continue $ do
                     monad
-                    loop stopVariable monad
+                    loop stopChannel monad
                 
+            await monad = do
+                flag <- monad
+                when (not flag) retry
 
-initializeColors :: IO (Color -> Attr)
-initializeColors = do
-    let red' = Attr KeepCurrent (SetTo red) (SetTo black)
-    let green' = Attr KeepCurrent (SetTo green) (SetTo black)
-    let blue' = Attr KeepCurrent (SetTo blue) (SetTo black)
-    let black' = Attr KeepCurrent (SetTo black) (SetTo black)
-    return $ \color -> case color of 
+initializeColors :: Color -> Attr
+initializeColors =
+    let red' = Attr KeepCurrent (SetTo red) (SetTo black) in
+    let green' = Attr KeepCurrent (SetTo green) (SetTo black) in
+    let blue' = Attr KeepCurrent (SetTo blue) (SetTo black) in
+    let black' = Attr KeepCurrent (SetTo black) (SetTo black) in
+    \color -> case color of 
         Transparent -> black'
         Green -> green'
         Blue -> blue'
