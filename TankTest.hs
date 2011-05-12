@@ -9,11 +9,12 @@ import Debug.Trace
 
 import World
 import World.NCurses
+import World.Vty
 import Entity
 import IdentityList
 
 main :: IO ()
-main = runWorld (gameLoop :: NCursesWorld -> IO ())
+main = runWorld (gameLoop :: VtyWorld -> IO ())
 
 gameLoop :: World w => w -> IO ()
 gameLoop world = do
@@ -95,7 +96,6 @@ game = proc worldInput -> do
             wallEntity (newWallState (vector2 0 0) (vector2 100 5))
             --wallEntity (newWallState (vector2 55 55) (vector2 60 60))
             ] ++ map wallEntity (brickWall (vector2 55 55) (vector2 60 60))
-
 
 gameCore :: IL Entity -> SF (WorldInput, IL EntityOutput) (IL EntityOutput)
 gameCore entities = 

@@ -7,7 +7,7 @@ synopsis:       YampaShooter is a top-down team based networked tank game using 
 build-type:     Simple
 stability:      alpha
 cabal-version:  >= 1.0
-Build-Depends:  base, Yampa, containers, stm, diffarray, text, transformers, ncurses, time
+Build-Depends:  base, Yampa, containers, stm, diffarray, text, transformers, ncurses, vty, time
 
 Executable: YampaShooter
 Main-is: TankTest.hs
