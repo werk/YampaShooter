@@ -9,11 +9,12 @@ import Debug.Trace
 
 import World
 import World.NCurses
+import World.Vty
 import Entity
 import IdentityList
 
 main :: IO ()
-main = runWorld (gameLoop :: NCursesWorld -> IO ())
+main = runWorld (gameLoop :: VtyWorld -> IO ())
 
 gameLoop :: World w => w -> IO ()
 gameLoop world = do
@@ -54,7 +55,7 @@ game = proc worldInput -> do
             tankEntity 1 (vector2 20 10) East,
             tankEntity 2 (vector2 40 40) West,
             wallEntity (vector2 0 0, vector2 5 100),
-            wallEntity (vector2 0 0, vector2 100 5),
+            wallEntity (vector2 0 0, vector2 300 5),
             wallEntity (vector2 55 55, vector2 60 60)
             ]
 

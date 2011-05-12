@@ -65,7 +65,8 @@ initializeColors = do
 draw :: Window -> (Color -> ColorID) -> WorldOutput -> Curses ()
 draw window colors worldOutput = do
     (rows, columns) <- screenSize
-    let picture = background columns rows
+    -- Workaround (rows - 1) because drawing on the bottom edge breaks NCurses
+    let picture = background columns (rows - 1)     
     let picture' = foldl' drawEntity picture (entityStates worldOutput) 
     drawPicture window colors picture'
 

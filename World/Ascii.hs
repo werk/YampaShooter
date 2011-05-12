@@ -29,8 +29,7 @@ drawEntity picture entityState = case entityState of
 
 background :: Integral a => a -> a -> DiffArray (Int, Int) (Char, Color)     
 background width height = 
-    -- Workaround -2 because drawing on the bottom edge breaks NCurses
-    listArray ((0, 0), (fromIntegral width - 1, fromIntegral height - 2)) (repeat (' ', Transparent))
+    listArray ((0, 0), (fromIntegral width - 1, fromIntegral height - 1)) (repeat (' ', Transparent))
 
 translatePoints :: (Int, Int) -> [((Int, Int), (Char, Color))] -> [((Int, Int), (Char, Color))]
 translatePoints (x, y) sprite = 
