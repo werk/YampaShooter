@@ -41,7 +41,45 @@ gameLoop world = do
 diffTime :: UTCTime -> UTCTime -> DTime
 diffTime newTime oldTime = (fromRational . toRational) (diffUTCTime newTime oldTime)
 
+newProjectileState player position direction = EntityState {
+    entityType = Projectile 10,
+    entityPosition = position ^+^ (2 *^ directionVector direction),
+    entityDirection = direction,
+    entityPlayer = player,
+    entitySize = vector2 1 1,
+    isSolid = False
+    }
+    
+newTankState player position direction = EntityState {
+    entityType = Tank,
+    entityPosition = position,
+    entityVelocity = vector2 0 0,
+    entityDirection = direction,
+    entityPlayer = player,
+    entitySize = vector2 3 3,
+    entityHealth = 100,
+    isSolid = True
+    }
+    
+newWallState point1 point2 = EntityState {
+    entityType = Wall,
+    entityPosition = 0.5 *^ (point1 ^+^ point2),
+    entityVelocity = zeroVector,
+    entityDirection = North,
+    entitySize = point2 ^-^ point1,
+    entityHealth = 1,
+    isSolid = True
+    }
 
+brickWall :: Vector -> Vector -> [EntityState]
+brickWall point1 point2 = 
+    [newWallState p1 p2 | 
+        x <- [vector2X point1 .. vector2X point2], 
+        y <- [vector2Y point1 .. vector2Y point2],
+        let d = vector2 0.5 0.5,
+        let p1 = vector2 x y ^-^ d,
+        let p2 = vector2 x y ^+^ d]
+        
 game :: SF WorldInput WorldOutput
 game = proc worldInput -> do
     rec
@@ -50,13 +88,14 @@ game = proc worldInput -> do
         entityStates = map entityState (elemsIL entityOutputs)
         }
     where
-        entities0 = listToIL [
-            tankEntity 1 (vector2 20 10) East,
-            tankEntity 2 (vector2 40 40) West,
-            wallEntity (vector2 0 0, vector2 5 100),
-            wallEntity (vector2 0 0, vector2 100 5),
-            wallEntity (vector2 55 55, vector2 60 60)
-            ]
+        entities0 = listToIL $ [
+            tankEntity newProjectileState (newTankState 1 (vector2 20 10) East),
+            tankEntity newProjectileState (newTankState 2 (vector2 40 40) West),
+            wallEntity (newWallState (vector2 0 0) (vector2 5 100)),
+            wallEntity (newWallState (vector2 0 0) (vector2 100 5))
+            --wallEntity (newWallState (vector2 55 55) (vector2 60 60))
+            ] ++ map wallEntity (brickWall (vector2 55 55) (vector2 60 60))
+
 
 gameCore :: IL Entity -> SF (WorldInput, IL EntityOutput) (IL EntityOutput)
 gameCore entities = 
