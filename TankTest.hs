@@ -9,12 +9,12 @@ import Debug.Trace
 
 import World
 import World.NCurses
-import World.Vty
+--import World.Vty
 import Entity
 import IdentityList
 
 main :: IO ()
-main = runWorld (gameLoop :: VtyWorld -> IO ())
+main = runWorld (gameLoop :: NCursesWorld -> IO ())
 
 gameLoop :: World w => w -> IO ()
 gameLoop world = do

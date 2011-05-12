@@ -19,13 +19,13 @@ playerColor 1 = Red
 playerColor 2 = Green
 
 drawEntity :: Picture -> EntityState -> Picture
-drawEntity picture entityState = case entityState of
-    Tank { entityPosition = position, entityDirection = direction, entityPlayer = player } -> do 
-        drawTank picture (playerColor player) (position, direction)
-    Projectile { entityPosition = position, entityPlayer = player } -> do 
-        drawProjectile picture (playerColor player) position
-    Wall { entityPosition = position, entitySize = size } -> do 
-        drawWall picture position size
+drawEntity picture state = case entityType state of
+    Tank -> 
+        drawTank picture (playerColor (entityPlayer state)) (entityPosition state, entityDirection state)
+    Projectile _ -> 
+        drawProjectile picture (playerColor (entityPlayer state)) (entityPosition state)
+    Wall -> 
+        drawWall picture (entityPosition state) (entitySize state)
 
 background :: Integral a => a -> a -> DiffArray (Int, Int) (Char, Color)     
 background width height = 

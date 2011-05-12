@@ -70,20 +70,6 @@ draw window colors worldOutput = do
     let picture' = foldl' drawEntity picture (entityStates worldOutput) 
     drawPicture window colors picture'
 
-<<<<<<< HEAD
-drawEntity :: Picture -> EntityState -> Picture
-drawEntity picture state = 
-    case entityType state of
-        Tank -> 
-            drawTank picture (playerColor (entityPlayer state)) (entityPosition state, entityDirection state)
-        Projectile _ -> 
-            drawProjectile picture (playerColor (entityPlayer state)) (entityPosition state)
-        Wall -> 
-            drawWall picture (entityPosition state) (entitySize state)
-
-playerColor 1 = Red
-playerColor 2 = Green
-=======
 drawPicture :: Window -> (Color -> ColorID) -> Picture -> Curses ()
 drawPicture window colors picture = do
     updateWindow window $ do
@@ -92,7 +78,7 @@ drawPicture window colors picture = do
             setColor (colors color)
             drawText (T.pack ([character]))
     render
->>>>>>> 57ebb49c5c5608cca08181385dbc53769fe5ff0a
+
 
 getKey :: Window -> Curses (Maybe PlayerKey)
 getKey window = do
